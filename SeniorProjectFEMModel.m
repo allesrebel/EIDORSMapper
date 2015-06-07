@@ -64,7 +64,38 @@ for i=1:n_elec
 end
 
 fmdl= mk_fmdl_from_nodes( vtx, elec_nodes, z_contact, 'sq_m1');
+fmdl.solve=@fwd_solve_1st_order;
+fmdl.system_mat=@system_mat_1st_order;
+fmdl.jacobian=@jacobian_adjoint;
 
 show_fem(fmdl); axis image
 
 print_convert FEM_ElectodeStrips.png '-density 175'
+
+%%  Simulate EIT data
+% A Sample Simulation of the Electrodes in the forward model
+%   Simulates the electrodes with 5mA of current
+
+fmdl.stimulation= mk_stim_patterns(length(elec_nodes), 1, '{ad}','{ad}', {}, 5);
+
+img= mk_image(fmdl, 1);
+vh= fwd_solve(img);
+
+% interpolate onto mesh
+xym= interp_mesh( fmdl, 3);
+x_xym= xym(:,1,:); y_xym= xym(:,2,:);
+
+% non-conductive target
+ff  = (x_xym>-1) & (x_xym<1) & (y_xym<1) & (y_xym>-1);
+img.elem_data= img.elem_data - 0.1*mean(ff,3);
+
+% conductive target
+ff  = (x_xym> -1) & (x_xym< 1) & (y_xym<1) & (y_xym>-1);
+img.elem_data= img.elem_data + 0.1*mean(ff,3);
+
+% inhomogeneous image
+vi= fwd_solve(img);
+
+show_fem(img); axis image;
+print_convert FEM_Simulated.png
+
